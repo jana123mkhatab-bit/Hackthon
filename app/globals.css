@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+/* ============================================================
+   STUDYPILOT DESIGN TOKENS
+   Pulled from the product's Figma file — warm study-desk palette.
+   ============================================================ */
+:root {
+  --sp-ink: #2b2a27;
+  --sp-body: #62605c;
+  --sp-faint: #928e89;
+  --sp-paper: #fdfdf9;
+  --sp-border: #e6e1d8;
+  --sp-bg-warm: #faf7f2;
+  --sp-bg-sage-tint: #f0f4ee;
+  --sp-terracotta: #d46a43;
+  --sp-terracotta-tint: #f8ede8;
+  --sp-sage: #6e7f5e;
+  --sp-gold-border: #dfba4b;
+  --sp-gold-bg: #fbf7e6;
+  --sp-washi: #eadb9c;
+  --sp-rule-pink: #f2cfcb;
+
+  /* semantic mastery states (also used for accessibility "never rely on color alone" -> always paired with icon/label) */
+  --sp-state-strong: #6e7f5e;
+  --sp-state-practice: #dfba4b;
+  --sp-state-weak: #c1503e;
+
+  --sp-radius-sm: 4px;
+  --sp-radius-md: 6px;
+  --sp-radius-lg: 8px;
+}
+
+@theme inline {
+  --color-ink: var(--sp-ink);
+  --color-body: var(--sp-body);
+  --color-faint: var(--sp-faint);
+  --color-paper: var(--sp-paper);
+  --color-border: var(--sp-border);
+  --color-bg-warm: var(--sp-bg-warm);
+  --color-bg-sage-tint: var(--sp-bg-sage-tint);
+  --color-terracotta: var(--sp-terracotta);
+  --color-terracotta-tint: var(--sp-terracotta-tint);
+  --color-sage: var(--sp-sage);
+  --color-gold-border: var(--sp-gold-border);
+  --color-gold-bg: var(--sp-gold-bg);
+  --color-washi: var(--sp-washi);
+  --color-rule-pink: var(--sp-rule-pink);
+  --color-state-strong: var(--sp-state-strong);
+  --color-state-practice: var(--sp-state-practice);
+  --color-state-weak: var(--sp-state-weak);
+
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-hand: "Caveat Brush", cursive;
+
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pop: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ambient-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(2%, -3%) scale(1.06); }
+}
+.hero-glow {
+  animation: ambient-drift 16s ease-in-out infinite;
+}
+@keyframes pin-pulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.18); }
+}
+
+html {
+  background: var(--sp-bg-warm);
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+body {
+  background: var(--sp-bg-warm);
+  color: var(--sp-ink);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--sp-washi); color: var(--sp-ink); }
+
+a { color: inherit; }
+button { font-family: var(--font-sans); }
+
+/* visible focus ring everywhere, incl. keyboard-only nav requirement */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--sp-terracotta);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.font-serif-display { font-family: var(--font-serif); }
+.font-hand { font-family: var(--font-hand); }
+
+/* washi tape + torn/paper texture helpers reused across cards */
+.washi-tape {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%) rotate(1deg);
+  width: 88px;
+  height: 18px;
+  background: var(--sp-washi);
+  border: 1px solid rgba(43, 42, 39, 0.06);
+  opacity: 0.85;
+}
+.pin-dot {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.25);
+  animation: pin-pulse 2.6s ease-in-out infinite;
+}
+
+/* ============================================================
+   ACCESSIBILITY ENGINE — real, app-wide, driven by data attributes
+   on <html>. See lib/accessibility-context.tsx.
+   ============================================================ */
+
+/* Larger text */
+html[data-larger-text="true"] { font-size: 113%; }
+
+/* Higher contrast: deepen ink, flatten tints, strengthen borders */
+html[data-high-contrast="true"] {
+  --sp-body: #1c1b19;
+  --sp-faint: #45433f;
+  --sp-border: #9b958a;
+  --sp-bg-warm: #ffffff;
+}
+html[data-high-contrast="true"] .adaptive-tint {
+  background: var(--sp-paper) !important;
+  border-width: 2px !important;
+}
+
+/* Reduced density: hide secondary/tertiary content app-wide */
+html[data-reduced-density="true"] .density-secondary { display: none !important; }
+html[data-reduced-density="true"] .density-pad { padding: 12px !important; }
+
+/* Reduced motion (manual toggle, in addition to OS preference) */
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ADHD-friendly focus mode: simplify, single-task emphasis */
+html[data-adhd-mode="true"] .adhd-hide { display: none !important; }
+html[data-adhd-mode="true"] .adhd-emphasize { box-shadow: 0 0 0 2px var(--sp-terracotta) !important; }
+
+/* Dyslexia-friendly mode: spacing, chunking, highlight key terms */
+html[data-dyslexia-mode="true"] .dys-copy {
+  line-height: 1.95 !important;
+  letter-spacing: 0.01em;
+  word-spacing: 0.06em;
+  max-width: 60ch;
+}
+html[data-dyslexia-mode="true"] .dys-badge { display: inline-flex !important; }
+
+/* Low connectivity mode: strip decorative texture/shadow weight */
+html[data-low-connectivity="true"] .adaptive-shadow { box-shadow: none !important; }
+html[data-low-connectivity="true"] .washi-tape,
+html[data-low-connectivity="true"] .pin-dot { display: none !important; }
