@@ -32,12 +32,28 @@ export function OnboardingWizard() {
   const acc = useAccessibility();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<OnboardingData>(loadOnboarding());
+  const [serverLoaded, setServerLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("Computer Science");
   const [customName, setCustomName] = useState("");
 
   useEffect(() => {
+    if (!serverLoaded) return;
     saveOnboarding(data);
-  }, [data]);
+  }, [data, serverLoaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/preferences")
+      .then((response) => response.json())
+      .then((payload: { preferences?: { onboarding?: OnboardingData } | null }) => {
+        if (!cancelled && payload.preferences?.onboarding) {
+          setData((current) => ({ ...current, ...payload.preferences?.onboarding }));
+        }
+        if (!cancelled) setServerLoaded(true);
+      })
+      .catch(() => { if (!cancelled) setServerLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   const selectedCourses = useMemo(
     () => COURSES.filter((c) => data.selectedCourseIds.includes(c.id)),

@@ -65,6 +65,36 @@ export interface AssessmentResult {
   aiExplanation: string;
 }
 
+export interface ExplanationSettings {
+  length: "brief" | "standard" | "detailed";
+  stepByStep: boolean;
+  simplifiedVocabulary: boolean;
+  examplesFirst: boolean;
+  chunked: boolean;
+}
+
+export interface AnalysisResult {
+  fileName: string;
+  courseId: string;
+  learningObjectives: string[];
+  importantConcepts: { name: string; importance: number }[];
+  assessmentPatterns: string[];
+  dependencies: { concept: string; requires: string[] }[];
+}
+
+export interface TutorMessage {
+  role: "user" | "assistant";
+  content: string;
+  groundedIn?: string;
+}
+
+export interface GradeResult {
+  scorePct: number;
+  strengths: string[];
+  gaps: string[];
+  aiExplanation: string;
+}
+
 export interface StudySession {
   id: string;
   day: string; // "Monday" etc, or ISO date

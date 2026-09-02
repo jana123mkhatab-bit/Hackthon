@@ -4,10 +4,11 @@ A subject-agnostic academic copilot: it reads what you upload (lectures, notes, 
 assessments), figures out what your professor actually emphasizes, tests you on it, finds your
 real knowledge gaps, and builds a study plan and interface around how you personally learn best.
 
-This is a hackathon-grade prototype. The frontend, UX flows, accessibility engine, and
-scheduling logic are fully real and interactive. The AI layer (`lib/ai-mock.ts`) and the Google
-Calendar integration (`lib/calendar-mock.ts`) are clearly-labeled, realistic mocks — see
-**What's real vs. mocked** below.
+The frontend keeps its offline/demo fallback, while production requests use the App Router API,
+an anonymous secure session cookie, and MongoDB Atlas for user preferences, course/material
+metadata, analyses, assessments, tutor messages, and study plans. Lecture analysis and assessment
+generation/grading use Groq server-side; the retrieval-grounded tutor uses Gemini server-side.
+Google Calendar remains a clearly-labeled mock.
 
 ## Getting started
 
@@ -21,6 +22,18 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000). The marketing site is the `/` route;
 `/onboarding` starts the setup flow, and everything past that lives behind the app shell
 (`/dashboard`, `/courses`, `/plan`, `/techniques`, `/settings/accessibility`).
+
+Copy `.env.example` to `.env.local` and add server-only API keys before using live AI:
+
+```bash
+GROQ_API_KEY=your_groq_key
+GEMINI_API_KEY=your_gemini_key
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DB=studypilot
+```
+
+Keys are read only by server routes and are never sent to the browser. If a key is missing,
+the app uses a clearly bounded course-context fallback and reports provider failures safely.
 
 For a production build:
 
@@ -63,6 +76,23 @@ npm start
     density, motion, the status bar at the very top of every page) — not just a settings page
     that does nothing.
 
+## Vercel deployment and persistence
+
+1. Create a MongoDB Atlas cluster, create a database user, configure network access, and copy the
+   SRV connection string. Set `MONGODB_URI` and `MONGODB_DB` in Vercel Environment Variables. The
+   official MongoDB Node.js driver is cached by `lib/db.ts`, so serverless invocations reuse
+   connections safely.
+2. In the Vercel project Environment Variables, add `GROQ_API_KEY` and `GEMINI_API_KEY` (and
+   optional model overrides). Never use a `NEXT_PUBLIC_` prefix for provider keys.
+3. Deploy with `vercel --prod` or connect the Git repository. Collections and ownership-scoped
+   indexes are created lazily by the application; no migration command is required. No Blob bucket
+   is required: extracted text is bounded to 150,000 characters and stored in MongoDB; uploads are
+   limited to 10 MB.
+
+The API uses HttpOnly/SameSite session cookies, request size validation, bounded prompt/history
+inputs, and best-effort per-session rate limits suitable for serverless instances. If MongoDB or
+AI keys are absent, the original mock course data and deterministic AI fallbacks remain available.
+
 ## What's real vs. mocked
 
 **Real and fully interactive:**
@@ -73,13 +103,18 @@ npm start
 - The scheduling engine (`lib/scheduling-engine.ts`) — deterministic plan generation and
   adaptive re-planning after a poor assessment result
 - Assessment scoring, knowledge-gap detection, and technique recommendation logic
-- Onboarding, course selection, and plan preferences (persisted to `localStorage`)
+- Onboarding, course selection, preferences, analyses, attempts, tutor messages, and plans are
+  persisted through the API when MongoDB is configured; `localStorage` remains an offline fallback.
 
-**Realistic mocks, clearly labeled in the UI and in code:**
-- `lib/ai-mock.ts` — stands in for an LLM + embeddings + RAG pipeline. Every function is shaped
-  the way a real implementation would be called (async, structured input/output, simulated
-  latency) specifically so swapping in a real provider later is a body-only change — see the
-  comment at the top of the file.
+**AI implementation:**
+- `app/api/ai/analyze` extracts uploaded text and calls Groq for structured objectives, concepts,
+  assessment patterns, and dependencies.
+- `app/api/ai/assessment` generates and grades assessments with Groq.
+- `app/api/ai/tutor` calls Gemini with course context, uploaded material, preferences, and recent
+  conversation history.
+- `lib/ai-client.ts` contains browser-safe API clients; provider keys never enter client code.
+- Plain text, Markdown, CSV, JSON, RTF, HTML, XML, and text-based PDF uploads are supported. Binary or
+  unreadable files receive a safe validation error.
 - `lib/calendar-mock.ts` — a mock Google Calendar connection. The UI explicitly labels every
   button and status message "(mock)" so it's never mistaken for a real integration.
 
@@ -88,6 +123,7 @@ npm start
 ```
 app/                    Next.js App Router pages
   (app)/                Authenticated app shell: dashboard, courses, plan, techniques, settings
+  api/                  Session, persistence, AI, tutor, assessment, material, and plan endpoints
   onboarding/           5-step setup wizard
 components/
   marketing/            Landing page sections
@@ -100,10 +136,13 @@ components/
   ui/                    Design-system primitives (Button, Card, Chip, Switch, Progress, ...)
 lib/
   mock-data.ts           Sample courses, concepts, assessments, professor focus data
-  ai-mock.ts              Mock AI service layer
+  ai.ts                   Server-only Groq/Gemini provider layer
+  ai-client.ts            Browser-safe API clients
   calendar-mock.ts        Mock Google Calendar integration
   scheduling-engine.ts     Deterministic study-plan generator
   accessibility-context.tsx  The adaptive-learning / accessibility engine
+  db.ts, server-session.ts   MongoDB Atlas adapter and anonymous session utilities
+  server-course.ts           Validated built-in/custom course resolution for AI requests
   onboarding-store.ts      Onboarding state persistence
 ```
 

@@ -20,8 +20,8 @@ import {
  *  - toggles here set data-* attributes on <html>, which globals.css
  *    reads to change typography, density, motion, and contrast
  *    everywhere in the app (not just on a settings page)
- *  - `explanationSettings()` below is consulted by the mock AI layer
- *    (lib/ai-mock.ts) to change explanation length, sentence
+ *  - `explanationSettings()` below is sent to the server-side AI tutor
+ *    to change explanation length, sentence
  *    complexity, and structure
  *  - `studySettings()` is consulted by the scheduling engine
  *    (lib/scheduling-engine.ts) to change session length and break
@@ -87,7 +87,7 @@ interface AccessibilityContextValue {
   has: (p: AccessibilityPreference) => boolean;
   hasLearning: (p: LearningPreference) => boolean;
   hasMode: (m: SupportMode) => boolean;
-  /** Consulted by the mock AI layer to shape explanation text. */
+  /** Sent to the server-side AI tutor to shape explanation text. */
   explanationSettings: () => {
     length: "brief" | "standard" | "detailed";
     stepByStep: boolean;
@@ -114,14 +114,29 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   // hydrate from localStorage once on mount — localStorage is unavailable
   // during SSR, so this can only run client-side, after mount.
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (raw) setStateRaw({ ...DEFAULT_STATE, ...JSON.parse(raw) });
-    } catch {
-      // ignore — best effort only
+    let cancelled = false;
+    async function hydrate() {
+      let next = DEFAULT_STATE;
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (raw) next = { ...next, ...JSON.parse(raw) };
+      } catch {
+        // ignore — best effort only
+      }
+      try {
+        const response = await fetch("/api/preferences");
+        const payload = (await response.json()) as { preferences?: { accessibility?: AccessibilityState } | null };
+        if (payload.preferences?.accessibility) next = { ...next, ...payload.preferences.accessibility };
+      } catch {
+        // The local state is sufficient for offline/demo mode.
+      }
+      if (!cancelled) {
+        setStateRaw(next);
+        setHydrated(true);
+      }
     }
-    setHydrated(true);
+    void hydrate();
+    return () => { cancelled = true; };
   }, []);
 
   // persist + reflect onto <html data-*> whenever state changes
@@ -132,6 +147,11 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     } catch {
       // best effort only
     }
+    void fetch("/api/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preferences: { accessibility: state } }),
+    }).catch(() => undefined);
     const root = document.documentElement;
     const has = (p: AccessibilityPreference) =>
       state.accessibilityPreferences.includes(p);
