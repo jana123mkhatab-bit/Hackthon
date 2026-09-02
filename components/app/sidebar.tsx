@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Flame, ArrowRight } from "lucide-react";
+import { Flame, ArrowRight, FileQuestion, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
-import { STUDENT } from "@/lib/mock-data";
+import { COURSES, STUDENT } from "@/lib/mock-data";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const courseMatch = pathname.match(/^\/courses\/([^/]+)/);
+  const activeCourse = courseMatch ? COURSES.find((c) => c.id === courseMatch[1]) : undefined;
 
   return (
     <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col justify-between border-r border-border bg-paper px-5 py-6 lg:flex">
@@ -37,6 +39,46 @@ export function Sidebar() {
               </Link>
             );
           })}
+
+          <Link
+            href="/courses"
+            className={cn(
+              "flex items-center gap-3 rounded-[4px] px-3 py-2.5 text-sm font-semibold transition-colors",
+              pathname === "/courses"
+                ? "bg-terracotta-tint text-terracotta"
+                : "text-body hover:bg-bg-warm hover:text-ink"
+            )}
+          >
+            <FileQuestion className="size-4" strokeWidth={2.25} />
+            Practice Exams
+          </Link>
+
+          {activeCourse && (
+            activeCourse.hasMaterials ? (
+              <Link
+                href={`/courses/${activeCourse.id}/assessment`}
+                className={cn(
+                  "flex items-center gap-3 rounded-[4px] px-3 py-2.5 text-sm font-semibold transition-colors",
+                  pathname === `/courses/${activeCourse.id}/assessment`
+                    ? "bg-terracotta-tint text-terracotta"
+                    : "text-body hover:bg-bg-warm hover:text-ink"
+                )}
+              >
+                <Sparkles className="size-4" strokeWidth={2.25} />
+                Generate Practice Exam
+              </Link>
+            ) : (
+              <div className="flex flex-col gap-0.5 rounded-[4px] px-3 py-2.5 text-sm font-semibold text-faint opacity-70">
+                <span className="flex items-center gap-3">
+                  <Sparkles className="size-4" strokeWidth={2.25} />
+                  Generate Practice Exam
+                </span>
+                <span className="pl-7 text-[11px] font-medium">
+                  Study {activeCourse.code} first, on the Overview tab
+                </span>
+              </div>
+            )
+          )}
         </nav>
 
         <Link

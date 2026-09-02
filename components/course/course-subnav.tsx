@@ -11,7 +11,7 @@ export function CourseSubnav({ courseId }: { courseId: string }) {
     { href: base, label: "Overview" },
     { href: `${base}/professor-focus`, label: "Professor Focus" },
     { href: `${base}/knowledge-map`, label: "Knowledge Map" },
-    { href: `${base}/assessment`, label: "Assessment" },
+    { href: `${base}/exam-analysis`, label: "Exam Analysis" },
     { href: `${base}/tutor`, label: "Ask My Lecture" },
   ];
 

@@ -382,6 +382,16 @@ export function getAssessmentQuestions(courseId: string): AssessmentQuestion[] {
 
 export const RECENT_ASSESSMENTS: AssessmentResult[] = [
   {
+    id: "a0",
+    courseId: "algorithms",
+    date: addDays(-16),
+    scorePct: 38,
+    strengths: ["Big-O comparisons"],
+    gaps: ["Recurrence relations", "Memoization vs. tabulation", "Base case identification"],
+    aiExplanation:
+      "Early on, recurrence relations and the distinction between memoization and tabulation were the clearest gaps - worth a focused pass before the next attempt.",
+  },
+  {
     id: "a1",
     courseId: "algorithms",
     date: addDays(-2),

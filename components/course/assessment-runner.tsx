@@ -157,8 +157,11 @@ export function AssessmentRunner({
         )}
 
         <div className="flex flex-wrap gap-3">
-          <Button href={`/courses/${course.id}/knowledge-map`}>
-            View Knowledge Map <ArrowRight className="size-4" />
+          <Button href={`/courses/${course.id}/exam-analysis`}>
+            View Exam Analysis <ArrowRight className="size-4" />
+          </Button>
+          <Button href={`/courses/${course.id}/knowledge-map`} variant="secondary" className="normal-case font-semibold">
+            View Knowledge Map
           </Button>
           <Button href="/plan" variant="secondary" className="normal-case font-semibold">
             See Updated Study Plan
