@@ -29,10 +29,10 @@ export function Navbar() {
               {l.label}
             </a>
           ))}
-          <Button href="/dashboard" variant="secondary" size="sm" className="normal-case font-semibold">
+          <Button href="/onboarding?source=signin" variant="secondary" size="sm" className="normal-case font-semibold">
             Sign In
           </Button>
-          <Button href="/onboarding" size="sm">
+          <Button href="/onboarding?source=get-started" size="sm">
             Get Started
           </Button>
         </div>
@@ -59,10 +59,10 @@ export function Navbar() {
             </a>
           ))}
           <div className="mt-2 flex gap-2">
-            <Button href="/dashboard" variant="secondary" size="sm" className="flex-1 normal-case font-semibold">
+            <Button href="/onboarding?source=signin" variant="secondary" size="sm" className="flex-1 normal-case font-semibold">
               Sign In
             </Button>
-            <Button href="/onboarding" size="sm" className="flex-1">
+            <Button href="/onboarding?source=get-started" size="sm" className="flex-1">
               Get Started
             </Button>
           </div>
