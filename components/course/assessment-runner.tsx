@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Check, ArrowRight, Sparkles, RotateCcw } from "lucide-react";
 import { AccentCard, Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MasteryBadge } from "@/components/ui/mastery-badge";
-import { gradeAssessment } from "@/lib/ai-mock";
+import { generateAssessment, gradeAssessment } from "@/lib/ai-client";
 import { adaptPlanAfterAssessment } from "@/lib/scheduling-engine";
 import { STUDY_PLAN } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { getCourseMaterialAsync } from "@/lib/course-material";
 import type { AssessmentQuestion, Course } from "@/lib/types";
 
 type Phase = "intro" | "question" | "grading" | "results";
@@ -37,15 +38,43 @@ export function AssessmentRunner({
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [result, setResult] = useState<GradeResult | null>(null);
   const [adaptMessage, setAdaptMessage] = useState<string | null>(null);
+  const [activeQuestions, setActiveQuestions] = useState(questions);
+  const [material, setMaterial] = useState("");
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
-  const current = questions[index];
+  const current = activeQuestions[index];
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadGeneratedAssessment() {
+      try {
+        const saved = await getCourseMaterialAsync(course.id);
+        if (!saved.trim()) return;
+        if (!cancelled) queueMicrotask(() => setMaterial(saved));
+        const generated = await generateAssessment(course.id, saved, course);
+        if (!cancelled && generated.length > 0) setActiveQuestions(generated);
+      } catch (caught) {
+        if (!cancelled) {
+          setGenerationError(
+            caught instanceof Error
+              ? `Using the starter assessment: ${caught.message}`
+              : "Using the starter assessment because generation is unavailable."
+          );
+        }
+      }
+    }
+    void loadGeneratedAssessment();
+    return () => {
+      cancelled = true;
+    };
+  }, [course]);
 
   function selectAnswer(choiceIndex: number) {
     setAnswers((a) => ({ ...a, [current.id]: choiceIndex }));
   }
 
   function next() {
-    if (index < questions.length - 1) {
+    if (index < activeQuestions.length - 1) {
       setIndex((i) => i + 1);
     } else {
       finish();
@@ -54,11 +83,17 @@ export function AssessmentRunner({
 
   async function finish() {
     setPhase("grading");
-    const res = await gradeAssessment(course.id, questions, answers);
-    setResult(res);
-    if (res.scorePct < 70 && res.gaps[0]) {
-      const { message } = adaptPlanAfterAssessment(STUDY_PLAN, course.id, res.gaps[0], 30);
-      setAdaptMessage(message);
+    try {
+      const res = await gradeAssessment(course.id, activeQuestions, answers, material, course);
+      setResult(res);
+      if (res.scorePct < 70 && res.gaps[0]) {
+        const { message } = adaptPlanAfterAssessment(STUDY_PLAN, course.id, res.gaps[0], 30);
+        setAdaptMessage(message);
+      }
+    } catch (caught) {
+      setGenerationError(caught instanceof Error ? caught.message : "Unable to grade this assessment.");
+      setPhase("intro");
+      return;
     }
     setPhase("results");
   }
@@ -71,7 +106,7 @@ export function AssessmentRunner({
     setAdaptMessage(null);
   }
 
-  if (questions.length === 0) {
+  if (activeQuestions.length === 0) {
     return (
       <Card className="p-8 text-center text-sm text-faint">
         Upload material for {course.code} on the Overview tab first — assessments are generated
@@ -86,10 +121,11 @@ export function AssessmentRunner({
         <Sparkles className="mx-auto mb-3 size-6 text-terracotta" />
         <h2 className="mb-2 font-serif-display text-2xl">AI Assessment — {course.code}</h2>
         <p className="mx-auto mb-6 max-w-md text-sm text-body">
-          {questions.length} questions grounded in what you&rsquo;ve uploaded, mixing question
+          {activeQuestions.length} questions grounded in what you&rsquo;ve uploaded, mixing question
           types and difficulty. Your results update your knowledge map and adjust your study plan
           automatically.
         </p>
+        {generationError && <p className="mb-4 text-sm text-terracotta">{generationError}</p>}
         <Button size="lg" onClick={() => setPhase("question")}>
           Start Assessment <ArrowRight className="size-4" />
         </Button>
@@ -179,7 +215,7 @@ export function AssessmentRunner({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-1.5">
-        {questions.map((q, i) => (
+        {activeQuestions.map((q, i) => (
           <span
             key={q.id}
             className={cn(
@@ -204,7 +240,7 @@ export function AssessmentRunner({
                 {TYPE_LABEL[current.type]}
               </span>
               <span className="text-xs text-faint">
-                Question {index + 1} of {questions.length} · {current.difficulty}
+                Question {index + 1} of {activeQuestions.length} · {current.difficulty}
               </span>
             </div>
             <p className="mb-6 text-lg font-medium leading-snug">{current.prompt}</p>
@@ -232,7 +268,7 @@ export function AssessmentRunner({
 
       <div className="flex justify-end">
         <Button onClick={next} disabled={selected === undefined}>
-          {index < questions.length - 1 ? "Next Question" : "Submit Assessment"} <ArrowRight className="size-4" />
+          {index < activeQuestions.length - 1 ? "Next Question" : "Submit Assessment"} <ArrowRight className="size-4" />
         </Button>
       </div>
     </div>

@@ -4,10 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Sparkles, Loader2, BookOpen } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ChipButton } from "@/components/ui/chip";
-import { askTutor, type TutorMessage } from "@/lib/ai-mock";
+import { askTutor } from "@/lib/ai-client";
 import { useAccessibility } from "@/lib/accessibility-context";
 import { cn } from "@/lib/utils";
-import type { Course } from "@/lib/types";
+import { getCourseMaterialAsync } from "@/lib/course-material";
+import type { Course, TutorMessage } from "@/lib/types";
 
 const QUICK_PROMPTS = [
   "Explain this simply",
@@ -28,11 +29,22 @@ export function TutorChat({ course }: { course: Course }) {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [material, setMaterial] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMaterial() {
+      const saved = await getCourseMaterialAsync(course.id);
+      if (!cancelled && saved) setMaterial(saved);
+    }
+    void loadMaterial();
+    return () => { cancelled = true; };
+  }, [course.id]);
 
   async function send(text: string) {
     const question = text.trim();
@@ -40,9 +52,29 @@ export function TutorChat({ course }: { course: Course }) {
     setMessages((m) => [...m, { role: "user", content: question }]);
     setInput("");
     setLoading(true);
-    const reply = await askTutor(question, acc.explanationSettings());
-    setMessages((m) => [...m, reply]);
-    setLoading(false);
+    try {
+      const reply = await askTutor(
+        course.id,
+        question,
+        acc.explanationSettings(),
+        material,
+        messages,
+        course
+      );
+      setMessages((m) => [...m, reply]);
+    } catch (caught) {
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: caught instanceof Error
+            ? caught.message
+            : "The AI tutor is unavailable right now. Please try again.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

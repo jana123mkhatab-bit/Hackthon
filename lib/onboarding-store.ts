@@ -1,4 +1,5 @@
 "use client";
+import { COURSES } from "./mock-data";
 
 /**
  * Lightweight persisted onboarding state. Separate from the accessibility
@@ -45,6 +46,31 @@ export function loadOnboarding(): OnboardingData {
 
 export function saveOnboarding(data: OnboardingData) {
   if (typeof window === "undefined") return;
+  // Keep the browser cache as an offline fallback, while making the server
+  // source of truth whenever a MongoDB database is configured.
+  void fetch("/api/preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: data.name, preferences: { onboarding: data } }),
+  }).catch(() => undefined);
+  const courses = [
+    ...COURSES.filter((course) => data.selectedCourseIds.includes(course.id)),
+    ...data.customCourses,
+  ];
+  for (const course of courses) {
+    void fetch("/api/courses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: course.id,
+        code: "code" in course ? course.code : "",
+        name: course.name,
+        subject: course.subject,
+        professor: "professor" in course ? course.professor : "",
+        metadata: course,
+      }),
+    }).catch(() => undefined);
+  }
   try {
     window.localStorage.setItem(KEY, JSON.stringify(data));
   } catch {

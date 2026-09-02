@@ -24,6 +24,13 @@ export default function PlanPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboarding(loadOnboarding());
+    void fetch("/api/study-plans")
+      .then((response) => response.json())
+      .then((payload: { plans?: { sessions?: StudySession[] }[] }) => {
+        const saved = payload.plans?.[0]?.sessions;
+        if (Array.isArray(saved) && saved.length) setPlan(saved);
+      })
+      .catch(() => undefined);
   }, []);
 
   const activeCourses = useMemo(
@@ -52,6 +59,15 @@ export default function PlanPage() {
         breaksEvery: settings.breaksEvery,
       });
       setPlan(generated.length ? generated : STUDY_PLAN);
+      void fetch("/api/study-plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: onboarding?.mode === "normal" ? "normal" : "exam",
+          preferences: { weeklyHours: onboarding?.weeklyHours ?? 8, sessionMinutes: settings.sessionMinutes },
+          sessions: generated,
+        }),
+      }).catch(() => undefined);
       setGenerating(false);
     }, 500);
   }
