@@ -1,51 +1,48 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getCollection } from "@/lib/db";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS, verifySessionToken } from "@/lib/jwt-edge";
 
-export const SESSION_COOKIE = "studypilot_session";
-const SESSION_MAX_AGE = 60 * 60 * 24 * 180;
+export { SESSION_COOKIE };
 
-export async function readSessionId(): Promise<string | null> {
-  return (await cookies()).get(SESSION_COOKIE)?.value ?? null;
-}
-
-/** Gets an anonymous session and creates its database user when possible. */
-export async function ensureSession(): Promise<{ id: string; isNew: boolean }> {
-  const existing = await readSessionId();
-  if (existing && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing)) {
-    await ensureUserRow(existing);
-    return { id: existing, isNew: false };
+export class UnauthorizedError extends Error {
+  constructor(message = "Not authenticated.") {
+    super(message);
+    this.name = "UnauthorizedError";
   }
-  const id = randomUUID();
-  await ensureUserRow(id);
-  return { id, isNew: true };
 }
 
-export function attachSessionCookie(response: NextResponse, id: string): NextResponse {
-  response.cookies.set(SESSION_COOKIE, id, {
+/** Returns the logged-in student's id, or null if not authenticated. */
+export async function getStudentId(): Promise<string | null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return verifySessionToken(token);
+}
+
+/** Returns the logged-in student's id, or throws UnauthorizedError. */
+export async function requireStudentId(): Promise<string> {
+  const studentId = await getStudentId();
+  if (!studentId) throw new UnauthorizedError();
+  return studentId;
+}
+
+export function attachSessionCookie(response: NextResponse, token: string): NextResponse {
+  response.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_MAX_AGE,
+    maxAge: SESSION_MAX_AGE_SECONDS,
   });
   return response;
 }
 
-export async function ensureUserRow(id: string): Promise<void> {
-  const users = await getCollection("users");
-  if (!users) return;
-  await users.updateOne(
-    { id },
-    { $setOnInsert: { id, sessionToken: id, createdAt: new Date(), updatedAt: new Date(), name: null } },
-    { upsert: true }
-  );
-}
-
-export async function sessionUserId(): Promise<string> {
-  const { id } = await ensureSession();
-  await ensureUserRow(id);
-  return id;
+export function clearSessionCookie(response: NextResponse): NextResponse {
+  response.cookies.set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
+  return response;
 }

@@ -1,7 +1,7 @@
 import "server-only";
-import { COURSES } from "@/lib/mock-data";
 import type { Concept, Course, MasteryState, SubjectCategory } from "@/lib/types";
 import { getCollection } from "@/lib/db";
+import type { CourseDoc, ExamDoc, KnowledgeProfileDoc, KnowledgeTopic } from "@/lib/models";
 
 const SUBJECTS: SubjectCategory[] = [
   "Computer Science",
@@ -11,63 +11,117 @@ const SUBJECTS: SubjectCategory[] = [
   "Science",
   "Humanities",
 ];
-const COLORS = new Set<Course["color"]>(["terracotta", "sage", "gold"]);
+const COLORS: Course["color"][] = ["terracotta", "sage", "gold"];
 
-function boundedString(value: unknown, max: number): string {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
+export function slugifyTopic(topic: string): string {
+  return topic.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "topic";
 }
 
-function masteryState(value: unknown, mastery: number): MasteryState {
-  if (value === "strong" || value === "practicing" || value === "weak" || value === "untested") return value;
-  if (mastery >= 75) return "strong";
-  if (mastery >= 45) return "practicing";
-  return mastery > 0 ? "weak" : "untested";
+function masteryState(status: KnowledgeTopic["status"]): MasteryState {
+  return status;
 }
 
-function normalizeConcept(value: unknown, index: number): Concept | null {
-  if (!value || typeof value !== "object") return null;
-  const item = value as Record<string, unknown>;
-  const name = boundedString(item.name, 160);
-  if (!name) return null;
-  const id = boundedString(item.id, 100) || `concept-${index + 1}`;
-  const mastery = Math.min(100, Math.max(0, Math.round(Number(item.mastery) || 0)));
-  const dependsOn = Array.isArray(item.dependsOn)
-    ? item.dependsOn.filter((dependency): dependency is string => typeof dependency === "string").map((dependency) => dependency.slice(0, 100)).slice(0, 8)
-    : undefined;
-  return { id, name, mastery, state: masteryState(item.state, mastery), ...(dependsOn?.length ? { dependsOn } : {}) };
+function topicsToConcepts(topics: KnowledgeTopic[]): Concept[] {
+  return topics.map((topic) => ({
+    id: slugifyTopic(topic.topic),
+    name: topic.topic,
+    mastery: topic.mastery,
+    state: masteryState(topic.status),
+  }));
 }
 
-export function sanitizeCourseInput(courseId: string, value: unknown): Course | null {
-  if (!value || typeof value !== "object") return null;
-  const item = value as Record<string, unknown>;
-  if (boundedString(item.id, 100) !== courseId) return null;
-  const metadata = item.metadata && typeof item.metadata === "object" ? item.metadata as Record<string, unknown> : {};
-  const rawConcepts = Array.isArray(item.concepts) ? item.concepts : Array.isArray(metadata.concepts) ? metadata.concepts : [];
-  const concepts = rawConcepts.map(normalizeConcept).filter((concept): concept is Concept => Boolean(concept)).slice(0, 50);
-  const subject = boundedString(item.subject, 80);
-  const color = boundedString(item.color ?? metadata.color, 20) as Course["color"];
+/** Reconstructs the frontend Course shape from the courses/knowledgeProfiles/exams collections. */
+export function mapCourseDoc(
+  courseDoc: CourseDoc,
+  topics: KnowledgeTopic[],
+  latestExamDate: string | undefined,
+  hasMaterials: boolean
+): Course {
+  const subject = SUBJECTS.includes(courseDoc.subject as SubjectCategory)
+    ? (courseDoc.subject as SubjectCategory)
+    : "Humanities";
+  const color = COLORS.includes(courseDoc.color as Course["color"]) ? (courseDoc.color as Course["color"]) : "sage";
+  const concepts = topicsToConcepts(topics);
+  // confidenceLevel is a 1-5 self-reported scale, not 0-100 — only used as a fallback until real assessments exist.
+  const progressPct = concepts.length
+    ? Math.round(concepts.reduce((sum, c) => sum + c.mastery, 0) / concepts.length)
+    : Math.max(0, Math.min(100, Math.round(((courseDoc.confidenceLevel ?? 0) / 5) * 100)));
+
   return {
-    id: courseId,
-    code: boundedString(item.code, 40),
-    name: boundedString(item.name, 200) || "Untitled course",
-    professor: boundedString(item.professor, 120),
-    subject: SUBJECTS.includes(subject as SubjectCategory) ? subject as SubjectCategory : "Humanities",
-    color: COLORS.has(color) ? color : "sage",
+    id: courseDoc._id,
+    code: courseDoc.courseCode,
+    name: courseDoc.courseName,
+    professor: courseDoc.instructor,
+    subject,
+    color,
     concepts,
-    examDate: typeof (item.examDate ?? metadata.examDate) === "string" ? String(item.examDate ?? metadata.examDate).slice(0, 40) : undefined,
-    progressPct: Math.min(100, Math.max(0, Math.round(Number(item.progressPct ?? metadata.progressPct) || 0))),
-    hasMaterials: true,
+    examDate: latestExamDate,
+    progressPct,
+    hasMaterials,
+    priority: courseDoc.priority,
   };
 }
 
-/** Resolve built-in or user-created course metadata without trusting JSON fields. */
-export async function resolveCourse(courseId: string, userId?: string): Promise<Course | null> {
-  const builtIn = COURSES.find((course) => course.id === courseId);
-  if (builtIn) return builtIn;
-  if (!userId) return null;
-  const courses = await getCollection<Record<string, unknown>>("courses");
+async function latestExamDateFor(courseId: string): Promise<string | undefined> {
+  const exams = await getCollection<ExamDoc>("exams");
+  if (!exams) return undefined;
+  const upcoming = await exams.find({ courseId }).sort({ examDate: 1 }).limit(1).toArray();
+  return upcoming[0]?.examDate;
+}
+
+/** Resolve a single course owned by the given student, joined with its knowledge profile and next exam. */
+export async function getCourseForStudent(studentId: string, courseId: string): Promise<Course | null> {
+  const courses = await getCollection<CourseDoc>("courses");
   if (!courses) return null;
-  const row = await courses.findOne({ id: courseId, userId });
-  if (!row) return null;
-  return sanitizeCourseInput(courseId, { ...row, ...((row.metadata as Record<string, unknown> | null) ?? {}) });
+  const courseDoc = await courses.findOne({ _id: courseId, studentId });
+  if (!courseDoc) return null;
+
+  const [knowledgeProfiles, materials, examDate] = await Promise.all([
+    getCollection<KnowledgeProfileDoc>("knowledgeProfiles"),
+    getCollection("materials"),
+    latestExamDateFor(courseId),
+  ]);
+  const profile = await knowledgeProfiles?.findOne({ studentId, courseId });
+  const materialCount = (await materials?.countDocuments({ courseId })) ?? 0;
+
+  return mapCourseDoc(courseDoc, profile?.topics ?? [], examDate, materialCount > 0);
+}
+
+/** Resolve every course owned by the given student, joined with knowledge profiles and next exam dates. */
+export async function getCoursesForStudent(studentId: string): Promise<Course[]> {
+  const courses = await getCollection<CourseDoc>("courses");
+  if (!courses) return [];
+  const courseDocs = await courses.find({ studentId }).sort({ createdAt: 1 }).toArray();
+  if (courseDocs.length === 0) return [];
+
+  const [knowledgeProfiles, materials, exams] = await Promise.all([
+    getCollection<KnowledgeProfileDoc>("knowledgeProfiles"),
+    getCollection<{ courseId: string }>("materials"),
+    getCollection<ExamDoc>("exams"),
+  ]);
+  const courseIds = courseDocs.map((c) => c._id);
+  const [profiles, materialRows, examRows] = await Promise.all([
+    knowledgeProfiles?.find({ studentId, courseId: { $in: courseIds } }).toArray() ?? [],
+    materials?.find({ courseId: { $in: courseIds } }, { projection: { courseId: 1 } }).toArray() ?? [],
+    exams?.find({ courseId: { $in: courseIds } }).sort({ examDate: 1 }).toArray() ?? [],
+  ]);
+
+  const profileByCourseId = new Map(profiles.map((p) => [p.courseId, p.topics]));
+  const materialCountByCourseId = new Map<string, number>();
+  for (const row of materialRows) {
+    materialCountByCourseId.set(row.courseId, (materialCountByCourseId.get(row.courseId) ?? 0) + 1);
+  }
+  const nextExamByCourseId = new Map<string, string>();
+  for (const exam of examRows) {
+    if (!nextExamByCourseId.has(exam.courseId)) nextExamByCourseId.set(exam.courseId, exam.examDate);
+  }
+
+  return courseDocs.map((courseDoc) =>
+    mapCourseDoc(
+      courseDoc,
+      profileByCourseId.get(courseDoc._id) ?? [],
+      nextExamByCourseId.get(courseDoc._id),
+      (materialCountByCourseId.get(courseDoc._id) ?? 0) > 0
+    )
+  );
 }

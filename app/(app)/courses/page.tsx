@@ -2,13 +2,33 @@ import Link from "next/link";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
 import { ProgressBar } from "@/components/ui/progress";
-import { COURSES, SUBJECT_CATEGORIES } from "@/lib/mock-data";
+import { SUBJECT_CATEGORIES } from "@/lib/mock-data";
+import { requireStudentId } from "@/lib/server-session";
+import { getCoursesForStudent } from "@/lib/server-course";
 import { daysUntil } from "@/lib/scheduling-engine";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Courses — StudyPilot AI" };
 
-export default function CoursesPage() {
+export default async function CoursesPage() {
+  const studentId = await requireStudentId();
+  const courses = await getCoursesForStudent(studentId);
+
+  if (courses.length === 0) {
+    return (
+      <div className="flex flex-col gap-8">
+        <PageHeader
+          eyebrow="Your Academic Context"
+          title="Courses"
+          subtitle="Every course StudyPilot is grounded in — any major, any professor. Open one to upload material and see what it actually emphasizes."
+        />
+        <Card className="p-8 text-center text-sm text-faint">
+          No courses yet — add one from onboarding or the dashboard to get started.
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -18,7 +38,7 @@ export default function CoursesPage() {
       />
 
       {SUBJECT_CATEGORIES.map((subject) => {
-        const inSubject = COURSES.filter((c) => c.subject === subject);
+        const inSubject = courses.filter((c) => c.subject === subject);
         if (inSubject.length === 0) return null;
         return (
           <div key={subject} className="flex flex-col gap-3">

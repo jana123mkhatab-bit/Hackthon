@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { COURSES } from "@/lib/mock-data";
+import { requireStudentId } from "@/lib/server-session";
+import { getCourseForStudent } from "@/lib/server-course";
 import { daysUntil } from "@/lib/scheduling-engine";
 import { CourseSubnav } from "@/components/course/course-subnav";
 
@@ -12,7 +13,8 @@ export default async function CourseLayout({
   params: Promise<{ courseId: string }>;
 }) {
   const { courseId } = await params;
-  const course = COURSES.find((c) => c.id === courseId);
+  const studentId = await requireStudentId();
+  const course = await getCourseForStudent(studentId, courseId);
   if (!course) notFound();
 
   const days = daysUntil(course.examDate);

@@ -15,18 +15,31 @@ export interface PlanRequest {
   availableHoursPerWeek: number;
   sessionMinutes: number; // from accessibility studySettings()
   breaksEvery: number;
+  /** Exam readiness per course (0-100, from exams.readinessScore) — lower readiness pulls a course's weak concepts earlier in the plan. */
+  readinessByCourseId?: Record<string, number>;
+  /** Course priority (low/medium/high, from courses.priority) — higher priority pulls a course's weak concepts earlier in the plan. */
+  priorityByCourseId?: Record<string, "low" | "medium" | "high">;
 }
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const PRIORITY_WEIGHT: Record<"low" | "medium" | "high", number> = { low: 0, medium: 15, high: 30 };
 
 export function generatePlan(req: PlanRequest): StudySession[] {
   const sessions: StudySession[] = [];
-  const weakConcepts = req.courses.flatMap((c) =>
-    c.concepts
-      .filter((con) => con.mastery < 60)
-      .sort((a, b) => a.mastery - b.mastery)
-      .map((con) => ({ course: c, concept: con }))
-  );
+  const urgencyFor = (courseId: string) => {
+    const readiness = req.readinessByCourseId?.[courseId];
+    const priority = req.priorityByCourseId?.[courseId];
+    const readinessBoost = readiness === undefined ? 0 : (100 - readiness) * 0.3;
+    const priorityBoost = priority ? PRIORITY_WEIGHT[priority] : 0;
+    return readinessBoost + priorityBoost;
+  };
+  const weakConcepts = req.courses
+    .flatMap((c) =>
+      c.concepts
+        .filter((con) => con.mastery < 60)
+        .map((con) => ({ course: c, concept: con }))
+    )
+    .sort((a, b) => (a.concept.mastery - urgencyFor(a.course.id)) - (b.concept.mastery - urgencyFor(b.course.id)));
 
   const totalMinutesAvailable = req.availableHoursPerWeek * 60;
   let minutesUsed = 0;

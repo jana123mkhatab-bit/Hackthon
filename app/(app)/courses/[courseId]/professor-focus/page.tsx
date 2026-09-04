@@ -3,7 +3,9 @@ import { Sparkles } from "lucide-react";
 import { AccentCard, Card } from "@/components/ui/card";
 import { StarRating } from "@/components/ui/star-rating";
 import { Chip } from "@/components/ui/chip";
-import { COURSES, getProfessorFocus } from "@/lib/mock-data";
+import { requireStudentId } from "@/lib/server-session";
+import { getCourseForStudent } from "@/lib/server-course";
+import { getProfessorFocusForCourse } from "@/lib/professor-focus";
 
 export default async function ProfessorFocusPage({
   params,
@@ -11,10 +13,11 @@ export default async function ProfessorFocusPage({
   params: Promise<{ courseId: string }>;
 }) {
   const { courseId } = await params;
-  const course = COURSES.find((c) => c.id === courseId);
+  const studentId = await requireStudentId();
+  const course = await getCourseForStudent(studentId, courseId);
   if (!course) notFound();
 
-  const focus = getProfessorFocus(courseId);
+  const focus = await getProfessorFocusForCourse(studentId, courseId);
 
   return (
     <div className="flex flex-col gap-6 pt-2">

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { COURSES } from "@/lib/mock-data";
+import { requireStudentId } from "@/lib/server-session";
+import { getCourseForStudent } from "@/lib/server-course";
 import { KnowledgeMapView } from "@/components/course/knowledge-map-view";
 
 export default async function KnowledgeMapPage({
@@ -8,7 +9,8 @@ export default async function KnowledgeMapPage({
   params: Promise<{ courseId: string }>;
 }) {
   const { courseId } = await params;
-  const course = COURSES.find((c) => c.id === courseId);
+  const studentId = await requireStudentId();
+  const course = await getCourseForStudent(studentId, courseId);
   if (!course) notFound();
 
   return (

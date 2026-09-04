@@ -1,56 +1,66 @@
-import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { getCollection } from "@/lib/db";
-import { attachSessionCookie, ensureSession } from "@/lib/server-session";
+import { NextResponse } from "next/server";
+import { getCollection, now } from "@/lib/db";
+import { requireStudentId, UnauthorizedError } from "@/lib/server-session";
 import { MAX_JSON_BYTES, tooLarge } from "@/lib/server-http";
+import { toStudySessionDocs, toStudySessions } from "@/lib/study-plan-mapper";
+import type { StudyPlanDoc } from "@/lib/models";
+import type { StudySession } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await ensureSession();
-  const plansCollection = await getCollection<Record<string, unknown>>("study_plans");
-  const plans = plansCollection
-    ? await plansCollection.find({ userId: session.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(10).toArray()
-    : [];
-  const sessions = await getCollection<Record<string, unknown>>("study_sessions");
-  if (sessions) {
-    for (const plan of plans) {
-      plan.sessions = await sessions.find({ planId: plan.id }, { projection: { _id: 0, session: 1, id: 1 } })
-        .sort({ id: 1 }).map((item) => item.session ?? item).toArray();
-    }
+  let studentId: string;
+  try {
+    studentId = await requireStudentId();
+  } catch (error) {
+    if (error instanceof UnauthorizedError) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    throw error;
   }
-  const response = NextResponse.json({ plans: plans.map((plan) => ({
-    id: plan.id, mode: plan.mode, preferences: plan.preferences, created_at: plan.createdAt, sessions: plan.sessions ?? [],
-  })) });
-  return session.isNew ? attachSessionCookie(response, session.id) : response;
+  const plans = await getCollection<StudyPlanDoc>("studyPlans");
+  const rows = plans ? await plans.find({ studentId }).sort({ createdAt: -1 }).limit(10).toArray() : [];
+  return NextResponse.json({
+    plans: rows.map((plan) => ({
+      id: plan._id,
+      mode: plan.mode,
+      created_at: plan.createdAt,
+      sessions: toStudySessions(plan.sessions),
+    })),
+  });
 }
 
 export async function POST(request: Request) {
   if (tooLarge(request, MAX_JSON_BYTES)) return NextResponse.json({ error: "Request is too large." }, { status: 413 });
-  const session = await ensureSession();
+  let studentId: string;
   try {
-    const body = await request.json() as { mode?: unknown; preferences?: unknown; sessions?: unknown };
+    studentId = await requireStudentId();
+  } catch (error) {
+    if (error instanceof UnauthorizedError) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    throw error;
+  }
+  try {
+    const body = (await request.json()) as { mode?: unknown; sessions?: unknown };
     const mode = body.mode === "normal" ? "normal" : "exam";
-    const items = Array.isArray(body.sessions) ? body.sessions.slice(0, 200) : [];
-    const plans = await getCollection("study_plans");
-    const studySessions = await getCollection("study_sessions");
-    if (plans && studySessions) {
-      const id = randomUUID();
-      const now = new Date();
-      await plans.insertOne({ id, userId: session.id, mode,
-        preferences: body.preferences && typeof body.preferences === "object" ? body.preferences : {},
-        createdAt: now });
-      if (items.length) {
-        await studySessions.insertMany(items.filter((item) => item && typeof item === "object").map((item) => {
-          const value = item as Record<string, unknown>;
-          return { id: randomUUID(), planId: id, courseId: typeof value.courseId === "string" ? value.courseId.slice(0, 100) : "",
-            session: value };
-        }));
-      }
-    }
-    const response = NextResponse.json({ ok: true }, { status: 201 });
-    return session.isNew ? attachSessionCookie(response, session.id) : response;
+    const sessions = (Array.isArray(body.sessions) ? body.sessions.slice(0, 200) : []) as StudySession[];
+
+    const plans = await getCollection<StudyPlanDoc>("studyPlans");
+    const timestamp = now();
+    const today = timestamp.toISOString().slice(0, 10);
+    const endDate = new Date(timestamp.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const plan: StudyPlanDoc = {
+      _id: randomUUID(),
+      studentId,
+      mode,
+      startDate: today,
+      endDate,
+      status: "active",
+      sessions: toStudySessionDocs(sessions),
+      createdAt: timestamp,
+    };
+    await plans?.insertOne(plan);
+
+    return NextResponse.json({ ok: true }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Invalid study plan payload." }, { status: 400 });
   }

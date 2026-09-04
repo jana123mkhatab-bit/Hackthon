@@ -1,16 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Flame, ArrowRight, FileQuestion, Sparkles } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Flame, ArrowRight, FileQuestion, Sparkles, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
-import { COURSES, STUDENT } from "@/lib/mock-data";
+import type { Course } from "@/lib/types";
 
-export function Sidebar() {
+export function Sidebar({
+  firstName,
+  streakDays,
+  courses,
+}: {
+  firstName: string;
+  streakDays: number;
+  courses: Course[];
+}) {
   const pathname = usePathname();
+  const router = useRouter();
   const courseMatch = pathname.match(/^\/courses\/([^/]+)/);
-  const activeCourse = courseMatch ? COURSES.find((c) => c.id === courseMatch[1]) : undefined;
+  const activeCourse = courseMatch ? courses.find((c) => c.id === courseMatch[1]) : undefined;
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    router.push("/onboarding?source=signin");
+    router.refresh();
+  }
 
   return (
     <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col justify-between border-r border-border bg-paper px-5 py-6 lg:flex">
@@ -93,16 +108,25 @@ export function Sidebar() {
       <div className="flex flex-col gap-3 rounded-[6px] border border-border bg-bg-warm p-4">
         <div className="flex items-center gap-2">
           <span className="flex size-8 items-center justify-center rounded-full bg-gold-bg text-sm font-bold text-terracotta">
-            {STUDENT.firstName[0]}
+            {firstName[0]}
           </span>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">{STUDENT.firstName}</span>
+            <span className="text-sm font-semibold">{firstName}</span>
             <span className="text-[11px] text-faint">Signed in</span>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-terracotta">
-          <Flame className="size-3.5" strokeWidth={2.5} />
-          {STUDENT.streakDays}-day streak
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-terracotta">
+            <Flame className="size-3.5" strokeWidth={2.5} />
+            {streakDays}-day streak
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="flex items-center gap-1 text-[11px] font-semibold text-faint transition-colors hover:text-terracotta"
+          >
+            <LogOut className="size-3.5" /> Log out
+          </button>
         </div>
       </div>
     </aside>

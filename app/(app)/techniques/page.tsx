@@ -1,15 +1,21 @@
 import { PageHeader } from "@/components/app/page-header";
 import { Card, StickyNote } from "@/components/ui/card";
 import { MasteryBadge } from "@/components/ui/mastery-badge";
-import { COURSES, TECHNIQUES, RESOURCES, recommendTechnique } from "@/lib/mock-data";
+import { TECHNIQUES, RESOURCES, recommendTechnique } from "@/lib/mock-data";
+import { requireStudentId } from "@/lib/server-session";
+import { getCoursesForStudent } from "@/lib/server-course";
 import { Clock, Video, FileText, Layers, Sparkles } from "lucide-react";
 
 export const metadata = { title: "Techniques & Resources — StudyPilot AI" };
 
 const RESOURCE_ICON = { video: Video, article: FileText, "practice-set": Layers, interactive: Sparkles };
 
-export default function TechniquesPage() {
-  const gaps = COURSES.filter((c) => c.hasMaterials)
+export default async function TechniquesPage() {
+  const studentId = await requireStudentId();
+  const courses = await getCoursesForStudent(studentId);
+
+  const gaps = courses
+    .filter((c) => c.hasMaterials)
     .flatMap((c) => c.concepts.filter((con) => con.state === "weak").map((con) => ({ course: c, concept: con })))
     .sort((a, b) => a.concept.mastery - b.concept.mastery);
 

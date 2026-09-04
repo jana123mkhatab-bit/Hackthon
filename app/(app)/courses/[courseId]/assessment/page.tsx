@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { COURSES, getAssessmentQuestions } from "@/lib/mock-data";
+import { requireStudentId } from "@/lib/server-session";
+import { getCourseForStudent } from "@/lib/server-course";
 import { AssessmentRunner } from "@/components/course/assessment-runner";
 
 export default async function AssessmentPage({
@@ -8,14 +9,13 @@ export default async function AssessmentPage({
   params: Promise<{ courseId: string }>;
 }) {
   const { courseId } = await params;
-  const course = COURSES.find((c) => c.id === courseId);
+  const studentId = await requireStudentId();
+  const course = await getCourseForStudent(studentId, courseId);
   if (!course) notFound();
-
-  const questions = getAssessmentQuestions(courseId);
 
   return (
     <div className="max-w-2xl pt-2">
-      <AssessmentRunner course={course} questions={questions} />
+      <AssessmentRunner course={course} questions={[]} />
     </div>
   );
 }

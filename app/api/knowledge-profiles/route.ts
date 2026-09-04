@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/db";
 import { requireStudentId, UnauthorizedError } from "@/lib/server-session";
-import type { AssessmentDoc } from "@/lib/models";
+import type { KnowledgeProfileDoc } from "@/lib/models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,19 +15,9 @@ export async function GET(request: Request) {
     throw error;
   }
   const courseId = new URL(request.url).searchParams.get("courseId")?.slice(0, 100);
-  const assessments = await getCollection<AssessmentDoc>("assessments");
+  const knowledgeProfiles = await getCollection<KnowledgeProfileDoc>("knowledgeProfiles");
   const filter: Record<string, unknown> = { studentId };
   if (courseId) filter.courseId = courseId;
-  const rows = assessments ? await assessments.find(filter).sort({ createdAt: -1 }).limit(20).toArray() : [];
-  return NextResponse.json({
-    assessments: rows.map((row) => ({
-      id: row._id,
-      course_id: row.courseId,
-      questions: row.questions,
-      score: row.score,
-      completed_at: row.completedAt,
-      ai_feedback: row.aiFeedback,
-      created_at: row.createdAt,
-    })),
-  });
+  const rows = knowledgeProfiles ? await knowledgeProfiles.find(filter).toArray() : [];
+  return NextResponse.json({ profiles: rows });
 }

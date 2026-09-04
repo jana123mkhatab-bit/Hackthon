@@ -27,6 +27,7 @@ export interface Course {
   examDate?: string; // ISO date
   progressPct: number; // syllabus coverage
   hasMaterials?: boolean; // false for a course added during onboarding with nothing uploaded yet
+  priority?: "low" | "medium" | "high";
 }
 
 export interface ProfessorFocusItem {

@@ -19,22 +19,25 @@ const cache = globalForMongo.__studyPilotMongo ?? (globalForMongo.__studyPilotMo
 
 async function createIndexes(db: Db): Promise<void> {
   await Promise.all([
-    db.collection("users").createIndex({ sessionToken: 1 }, { unique: true }),
-    db.collection("user_preferences").createIndex({ userId: 1 }, { unique: true }),
-    db.collection("courses").createIndex({ userId: 1, id: 1 }, { unique: true }),
-    db.collection("courses").createIndex({ userId: 1, createdAt: 1 }),
-    db.collection("materials").createIndex({ userId: 1, courseId: 1, createdAt: -1 }),
-    db.collection("lecture_analyses").createIndex({ userId: 1, materialId: 1, createdAt: -1 }),
-    db.collection("assessments").createIndex({ userId: 1, courseId: 1, createdAt: -1 }),
-    db.collection("assessment_attempts").createIndex({ userId: 1, courseId: 1, createdAt: -1 }),
-    db.collection("tutor_conversations").createIndex({ userId: 1, courseId: 1, updatedAt: -1 }),
+    db.collection("students").createIndex({ email: 1 }, { unique: true }),
+    db.collection("courses").createIndex({ studentId: 1 }),
+    db.collection("exams").createIndex({ studentId: 1 }),
+    db.collection("exams").createIndex({ courseId: 1 }),
+    db.collection("exams").createIndex({ courseId: 1, examDate: 1 }),
+    db.collection("materials").createIndex({ studentId: 1 }),
+    db.collection("materials").createIndex({ courseId: 1 }),
+    db.collection("lectureAnalyses").createIndex({ materialId: 1 }),
+    db.collection("assessments").createIndex({ studentId: 1 }),
+    db.collection("assessments").createIndex({ courseId: 1 }),
+    db.collection("knowledgeProfiles").createIndex({ studentId: 1 }),
+    db.collection("knowledgeProfiles").createIndex({ studentId: 1, courseId: 1 }),
+    db.collection("studyPlans").createIndex({ studentId: 1 }),
+    db.collection("tutor_conversations").createIndex({ studentId: 1, courseId: 1, updatedAt: -1 }),
     db.collection("tutor_messages").createIndex({ conversationId: 1, createdAt: 1 }),
-    db.collection("study_plans").createIndex({ userId: 1, createdAt: -1 }),
-    db.collection("study_sessions").createIndex({ planId: 1, id: 1 }),
   ]);
 }
 
-/** Return a cached Mongo database. Connections are reused across Vercel invocations. */
+/** Return a cached Mongo database, or null if unconfigured or unreachable (offline/demo experience). */
 export async function getDatabase(): Promise<Db | null> {
   if (!databaseConfigured || !uri || !dbName) return null;
   if (!cache.db) cache.connecting ??= (async () => {
@@ -45,17 +48,26 @@ export async function getDatabase(): Promise<Db | null> {
       return cache.db;
     } catch (error) {
       cache.connecting = undefined;
+      cache.client = undefined;
       throw error;
     }
   })();
-  await cache.connecting;
+  try {
+    await cache.connecting;
+  } catch {
+    return null;
+  }
   const db = cache.db;
-  if (!db) throw new Error("MongoDB connection was not initialized.");
+  if (!db) return null;
   cache.indexes ??= createIndexes(db).catch((error) => {
     cache.indexes = undefined;
     throw error;
   });
-  await cache.indexes;
+  try {
+    await cache.indexes;
+  } catch {
+    return db;
+  }
   return db;
 }
 

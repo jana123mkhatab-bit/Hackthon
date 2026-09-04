@@ -1,14 +1,15 @@
-const AUTH_KEY = "studypilot.auth.v1";
 const REDIRECT_KEY = "studypilot.auth.redirect.v1";
 
-export function isAuthenticated(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(AUTH_KEY) === "true";
-}
-
-export function setAuthenticated(value: boolean) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(AUTH_KEY, String(value));
+/** Asks the server whether the current session cookie belongs to a real, logged-in student. */
+export async function checkAuthenticated(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/auth/me");
+    if (!response.ok) return false;
+    const payload = (await response.json()) as { student?: unknown };
+    return Boolean(payload.student);
+  } catch {
+    return false;
+  }
 }
 
 export function getRedirectTarget(): string {

@@ -15,22 +15,41 @@ import { AccentCard, Card, StickyNote } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ui/progress";
 import { MasteryBadge } from "@/components/ui/mastery-badge";
-import {
-  COURSES,
-  STUDENT,
-  STUDY_PLAN,
-  RECENT_ASSESSMENTS,
-  TODAYS_FOCUS,
-  recommendTechnique,
-  RESOURCES,
-} from "@/lib/mock-data";
+import { RESOURCES, recommendTechnique } from "@/lib/mock-data";
 import { daysUntil } from "@/lib/scheduling-engine";
 import { cn } from "@/lib/utils";
+import type { AssessmentResult, Course, StudySession } from "@/lib/types";
 
 /* ---------------- Hero: recommended next action ---------------- */
 
-export function RecommendedNextAction() {
-  const course = COURSES.find((c) => c.id === TODAYS_FOCUS.courseId)!;
+export interface RecommendedFocus {
+  course: Course;
+  conceptName: string;
+  minutes: number;
+  reason: string;
+}
+
+export function RecommendedNextAction({ focus }: { focus: RecommendedFocus | null }) {
+  if (!focus) {
+    return (
+      <AccentCard accent="terracotta" className="p-6 md:p-8">
+        <div className="flex flex-col gap-3">
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-[4px] bg-terracotta-tint px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-terracotta">
+            <Sparkles className="size-3" /> Get started
+          </span>
+          <h2 className="font-serif-display text-2xl md:text-[28px]">Upload your first lecture</h2>
+          <p className="max-w-xl text-sm text-body">
+            Add material for one of your courses and StudyPilot will start surfacing knowledge gaps and
+            a recommended next session here.
+          </p>
+          <Button href="/courses" size="lg" className="w-fit shrink-0">
+            Go to Courses <ArrowRight className="size-4" />
+          </Button>
+        </div>
+      </AccentCard>
+    );
+  }
+  const { course } = focus;
   return (
     <AccentCard accent="terracotta" className="p-6 md:p-8">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
@@ -39,9 +58,9 @@ export function RecommendedNextAction() {
             <Sparkles className="size-3" /> Recommended next
           </span>
           <h2 className="font-serif-display text-2xl md:text-[28px]">
-            {TODAYS_FOCUS.minutes} min on {TODAYS_FOCUS.conceptName}
+            {focus.minutes} min on {focus.conceptName}
           </h2>
-          <p className="max-w-xl text-sm text-body">{TODAYS_FOCUS.reason}</p>
+          <p className="max-w-xl text-sm text-body">{focus.reason}</p>
           <span className="text-xs font-semibold text-faint">
             {course.code} — {course.name}
           </span>
@@ -56,19 +75,26 @@ export function RecommendedNextAction() {
 
 /* ---------------- Stats row ---------------- */
 
-export function StatsRow() {
-  const overallProgress = Math.round(
-    COURSES.filter((c) => c.hasMaterials).reduce((sum, c) => sum + c.progressPct, 0) /
-      COURSES.filter((c) => c.hasMaterials).length
-  );
-  const gapCount = COURSES.flatMap((c) => c.concepts).filter((c) => c.state === "weak").length;
-  const focusPct = Math.round((STUDENT.focusMinutesThisWeek / STUDENT.weeklyGoalMinutes) * 100);
+export interface StatsRowProps {
+  courses: Course[];
+  streakDays: number;
+  focusMinutesThisWeek: number;
+  weeklyGoalMinutes: number;
+}
+
+export function StatsRow({ courses, streakDays, focusMinutesThisWeek, weeklyGoalMinutes }: StatsRowProps) {
+  const withMaterials = courses.filter((c) => c.hasMaterials);
+  const overallProgress = withMaterials.length
+    ? Math.round(withMaterials.reduce((sum, c) => sum + c.progressPct, 0) / withMaterials.length)
+    : 0;
+  const gapCount = courses.flatMap((c) => c.concepts).filter((c) => c.state === "weak").length;
+  const focusPct = weeklyGoalMinutes ? Math.round((focusMinutesThisWeek / weeklyGoalMinutes) * 100) : 0;
 
   const stats = [
-    { label: "Study Streak", value: `${STUDENT.streakDays} days`, icon: Flame, accent: "text-terracotta" },
+    { label: "Study Streak", value: `${streakDays} days`, icon: Flame, accent: "text-terracotta" },
     {
       label: "Focus Time This Week",
-      value: `${STUDENT.focusMinutesThisWeek}m / ${STUDENT.weeklyGoalMinutes}m`,
+      value: `${focusMinutesThisWeek}m / ${weeklyGoalMinutes}m`,
       icon: Clock,
       accent: "text-sage",
       sub: `${focusPct}% of weekly goal`,
@@ -95,8 +121,8 @@ export function StatsRow() {
 
 const TODAY_NAME = new Date().toLocaleDateString("en-US", { weekday: "long" });
 
-export function WeeklyPlan() {
-  const byDay = STUDY_PLAN.reduce<Record<string, typeof STUDY_PLAN>>((acc, s) => {
+export function WeeklyPlan({ sessions, courses }: { sessions: StudySession[]; courses: Course[] }) {
+  const byDay = sessions.reduce<Record<string, StudySession[]>>((acc, s) => {
     (acc[s.day] ??= []).push(s);
     return acc;
   }, {});
@@ -109,52 +135,57 @@ export function WeeklyPlan() {
           Full plan <ArrowRight className="size-3.5" />
         </Link>
       </div>
-      <div className="flex flex-col gap-4">
-        {Object.entries(byDay).map(([day, sessions]) => (
-          <div key={day} className="flex flex-col gap-2">
-            <span
-              className={cn(
-                "text-[11px] font-bold uppercase tracking-wide",
-                day === TODAY_NAME ? "text-terracotta" : "text-faint"
-              )}
-            >
-              {day} {day === TODAY_NAME && "· Today"}
-            </span>
-            <div className="flex flex-col gap-1.5">
-              {sessions.map((s) => {
-                const course = COURSES.find((c) => c.id === s.courseId);
-                return (
-                  <div
-                    key={s.id}
-                    className={cn(
-                      "flex items-center justify-between gap-3 rounded-[4px] border px-3 py-2 text-sm",
-                      s.kind === "break" ? "border-dashed border-border text-faint" : "border-border bg-bg-warm/60"
-                    )}
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="w-[64px] shrink-0 text-xs text-faint">{s.time}</span>
-                      <span className="min-w-0 truncate font-medium">
-                        {s.conceptName}
-                        {course && s.kind !== "break" && (
-                          <span className="ml-1.5 text-xs font-normal text-faint">· {course.code}</span>
-                        )}
-                      </span>
+      {sessions.length === 0 ? (
+        <p className="text-sm text-faint">No plan yet — visit the Study Plan tab to generate one.</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {Object.entries(byDay).map(([day, daySessions]) => (
+            <div key={day} className="flex flex-col gap-2">
+              <span
+                className={cn(
+                  "text-[11px] font-bold uppercase tracking-wide",
+                  day === TODAY_NAME ? "text-terracotta" : "text-faint"
+                )}
+              >
+                {day} {day === TODAY_NAME && "· Today"}
+              </span>
+              <div className="flex flex-col gap-1.5">
+                {daySessions.map((s) => {
+                  const course = courses.find((c) => c.id === s.courseId);
+                  return (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-[4px] border px-3 py-2 text-sm",
+                        s.kind === "break" ? "border-dashed border-border text-faint" : "border-border bg-bg-warm/60"
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="w-[64px] shrink-0 text-xs text-faint">{s.time}</span>
+                        <span className="min-w-0 truncate font-medium">
+                          {s.conceptName}
+                          {course && s.kind !== "break" && (
+                            <span className="ml-1.5 text-xs font-normal text-faint">· {course.code}</span>
+                          )}
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-xs text-faint">{s.minutes}m</span>
                     </div>
-                    <span className="shrink-0 text-xs text-faint">{s.minutes}m</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
 
 /* ---------------- Course progress ---------------- */
 
-export function CourseProgressList() {
+export function CourseProgressList({ courses }: { courses: Course[] }) {
+  const withMaterials = courses.filter((c) => c.hasMaterials);
   return (
     <Card className="p-5 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
@@ -163,44 +194,51 @@ export function CourseProgressList() {
           View all <ArrowRight className="size-3.5" />
         </Link>
       </div>
-      <div className="flex flex-col gap-4">
-        {COURSES.filter((c) => c.hasMaterials).map((c) => {
-          const gaps = c.concepts.filter((con) => con.state === "weak").length;
-          return (
-            <Link
-              key={c.id}
-              href={`/courses/${c.id}`}
-              className="flex flex-col gap-2 rounded-[6px] border border-border p-4 transition-colors hover:border-faint"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-semibold">
-                    {c.code} — {c.name}
-                  </span>
-                  <span className="text-xs text-faint">{c.professor}</span>
+      {withMaterials.length === 0 ? (
+        <p className="text-sm text-faint">No material uploaded yet — open a course to add your first lecture.</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {withMaterials.map((c) => {
+            const gaps = c.concepts.filter((con) => con.state === "weak").length;
+            return (
+              <Link
+                key={c.id}
+                href={`/courses/${c.id}`}
+                className="flex flex-col gap-2 rounded-[6px] border border-border p-4 transition-colors hover:border-faint"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-semibold">
+                      {c.code} — {c.name}
+                    </span>
+                    <span className="text-xs text-faint">{c.professor}</span>
+                  </div>
+                  {gaps > 0 && (
+                    <span className="shrink-0 rounded-[4px] bg-[rgba(193,80,62,0.14)] px-2 py-1 text-[11px] font-bold text-[#a8402c]">
+                      {gaps} gap{gaps === 1 ? "" : "s"}
+                    </span>
+                  )}
                 </div>
-                {gaps > 0 && (
-                  <span className="shrink-0 rounded-[4px] bg-[rgba(193,80,62,0.14)] px-2 py-1 text-[11px] font-bold text-[#a8402c]">
-                    {gaps} gap{gaps === 1 ? "" : "s"}
-                  </span>
-                )}
-              </div>
-              <ProgressBar value={c.progressPct} />
-              <span className="text-[11px] text-faint">{c.progressPct}% syllabus coverage</span>
-            </Link>
-          );
-        })}
-      </div>
+                <ProgressBar value={c.progressPct} />
+                <span className="text-[11px] text-faint">{c.progressPct}% syllabus coverage</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </Card>
   );
 }
 
 /* ---------------- Upcoming exams ---------------- */
 
-export function UpcomingExams() {
-  const withExams = COURSES.filter((c) => c.examDate)
+export function UpcomingExams({ courses }: { courses: Course[] }) {
+  const withExams = courses
+    .filter((c) => c.examDate)
     .map((c) => ({ course: c, days: daysUntil(c.examDate) }))
     .sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
+
+  if (withExams.length === 0) return null;
 
   return (
     <Card className="p-5 sm:p-6">
@@ -227,8 +265,9 @@ export function UpcomingExams() {
 
 /* ---------------- Knowledge gaps summary ---------------- */
 
-export function KnowledgeGapsSummary() {
-  const gaps = COURSES.filter((c) => c.hasMaterials)
+export function KnowledgeGapsSummary({ courses }: { courses: Course[] }) {
+  const gaps = courses
+    .filter((c) => c.hasMaterials)
     .flatMap((c) => c.concepts.filter((con) => con.state === "weak").map((con) => ({ course: c, concept: con })))
     .sort((a, b) => a.concept.mastery - b.concept.mastery)
     .slice(0, 4);
@@ -243,56 +282,64 @@ export function KnowledgeGapsSummary() {
           </Link>
         )}
       </div>
-      <div className="flex flex-col gap-3">
-        {gaps.map(({ course, concept }) => (
-          <div key={concept.id} className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-medium">{concept.name}</span>
-              <span className="truncate text-xs text-faint">{course.code}</span>
+      {gaps.length === 0 ? (
+        <p className="text-sm text-faint">No gaps surfaced yet.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {gaps.map(({ course, concept }) => (
+            <div key={concept.id} className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium">{concept.name}</span>
+                <span className="truncate text-xs text-faint">{course.code}</span>
+              </div>
+              <MasteryBadge state={concept.state} />
             </div>
-            <MasteryBadge state={concept.state} />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
 
 /* ---------------- Recent assessments ---------------- */
 
-export function RecentAssessmentsList() {
+export function RecentAssessmentsList({ assessments, courses }: { assessments: AssessmentResult[]; courses: Course[] }) {
   return (
     <Card className="p-5 sm:p-6">
       <h3 className="mb-4 font-serif-display text-lg">Recent Assessments</h3>
-      <div className="flex flex-col gap-3">
-        {RECENT_ASSESSMENTS.map((a) => {
-          const course = COURSES.find((c) => c.id === a.courseId);
-          return (
-            <div key={a.id} className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-medium">{course?.code}</span>
-                <span className="truncate text-xs text-faint">{a.gaps[0]}</span>
+      {assessments.length === 0 ? (
+        <p className="text-sm text-faint">No assessments taken yet.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {assessments.map((a) => {
+            const course = courses.find((c) => c.id === a.courseId);
+            return (
+              <div key={a.id} className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium">{course?.code}</span>
+                  <span className="truncate text-xs text-faint">{a.gaps[0]}</span>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 font-serif-display text-lg",
+                    a.scorePct >= 70 ? "text-sage" : "text-[#a8402c]"
+                  )}
+                >
+                  {a.scorePct}%
+                </span>
               </div>
-              <span
-                className={cn(
-                  "shrink-0 font-serif-display text-lg",
-                  a.scorePct >= 70 ? "text-sage" : "text-[#a8402c]"
-                )}
-              >
-                {a.scorePct}%
-              </span>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </Card>
   );
 }
 
 /* ---------------- AI recommendation ---------------- */
 
-export function AIRecommendationCard() {
-  const weakest = COURSES.flatMap((c) => c.concepts.filter((con) => con.state === "weak")).sort(
+export function AIRecommendationCard({ courses }: { courses: Course[] }) {
+  const weakest = courses.flatMap((c) => c.concepts.filter((con) => con.state === "weak")).sort(
     (a, b) => a.mastery - b.mastery
   )[0];
   if (!weakest) return null;

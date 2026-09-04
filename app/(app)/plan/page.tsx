@@ -7,23 +7,37 @@ import { Button } from "@/components/ui/button";
 import { Card, AccentCard } from "@/components/ui/card";
 import { ChipButton } from "@/components/ui/chip";
 import { CalendarConnect } from "@/components/plan/calendar-connect";
-import { COURSES, STUDY_PLAN } from "@/lib/mock-data";
 import { generatePlan, daysUntil } from "@/lib/scheduling-engine";
 import { useAccessibility } from "@/lib/accessibility-context";
-import { loadOnboarding, saveOnboarding, type OnboardingData } from "@/lib/onboarding-store";
+import { cacheOnboarding, loadOnboarding, type OnboardingData } from "@/lib/onboarding-store";
 import { cn } from "@/lib/utils";
-import type { StudySession } from "@/lib/types";
+import type { Course, StudySession } from "@/lib/types";
+
+interface ExamRow {
+  courseId: string;
+  readinessScore: number;
+}
 
 export default function PlanPage() {
   const acc = useAccessibility();
   const [onboarding, setOnboarding] = useState<OnboardingData | null>(null);
-  const [plan, setPlan] = useState<StudySession[]>(STUDY_PLAN);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [exams, setExams] = useState<ExamRow[]>([]);
+  const [plan, setPlan] = useState<StudySession[]>([]);
   const [generating, setGenerating] = useState(false);
 
   // read localStorage after mount to avoid an SSR/client hydration mismatch
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnboarding(loadOnboarding());
+    void fetch("/api/courses")
+      .then((response) => response.json())
+      .then((payload: { courses?: Course[] }) => setCourses(payload.courses ?? []))
+      .catch(() => undefined);
+    void fetch("/api/exams")
+      .then((response) => response.json())
+      .then((payload: { exams?: ExamRow[] }) => setExams(payload.exams ?? []))
+      .catch(() => undefined);
     void fetch("/api/study-plans")
       .then((response) => response.json())
       .then((payload: { plans?: { sessions?: StudySession[] }[] }) => {
@@ -33,38 +47,45 @@ export default function PlanPage() {
       .catch(() => undefined);
   }, []);
 
-  const activeCourses = useMemo(
-    () => COURSES.filter((c) => c.hasMaterials && (!onboarding || onboarding.selectedCourseIds.includes(c.id))),
-    [onboarding]
-  );
+  const activeCourses = useMemo(() => courses.filter((c) => c.hasMaterials), [courses]);
 
   const examCourses = activeCourses.filter((c) => c.examDate);
+
+  const readinessByCourseId = useMemo(
+    () => Object.fromEntries(exams.map((e) => [e.courseId, e.readinessScore])),
+    [exams]
+  );
+  const priorityByCourseId = useMemo(
+    () => Object.fromEntries(courses.filter((c) => c.priority).map((c) => [c.id, c.priority!])),
+    [courses]
+  );
 
   function setMode(mode: "exam" | "normal") {
     if (!onboarding) return;
     const next = { ...onboarding, mode };
     setOnboarding(next);
-    saveOnboarding(next);
+    cacheOnboarding(next);
   }
 
   function regenerate() {
     setGenerating(true);
     const settings = acc.studySettings();
-    const courses = onboarding?.mode === "normal" ? activeCourses.map((c) => ({ ...c, examDate: undefined })) : activeCourses;
+    const planCourses = onboarding?.mode === "normal" ? activeCourses.map((c) => ({ ...c, examDate: undefined })) : activeCourses;
     setTimeout(() => {
       const generated = generatePlan({
-        courses,
+        courses: planCourses,
         availableHoursPerWeek: onboarding?.weeklyHours ?? 8,
         sessionMinutes: settings.sessionMinutes,
         breaksEvery: settings.breaksEvery,
+        readinessByCourseId,
+        priorityByCourseId,
       });
-      setPlan(generated.length ? generated : STUDY_PLAN);
+      setPlan(generated);
       void fetch("/api/study-plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: onboarding?.mode === "normal" ? "normal" : "exam",
-          preferences: { weeklyHours: onboarding?.weeklyHours ?? 8, sessionMinutes: settings.sessionMinutes },
           sessions: generated,
         }),
       }).catch(() => undefined);
@@ -134,13 +155,19 @@ export default function PlanPage() {
         </Card>
       )}
 
+      {plan.length === 0 && (
+        <Card className="p-8 text-center text-sm text-faint">
+          No plan yet — upload course material and take an assessment, then regenerate your plan.
+        </Card>
+      )}
+
       <div className="flex flex-col gap-5">
         {Object.entries(byDay).map(([day, sessions]) => (
           <Card key={day} className="p-5 sm:p-6">
             <span className="mb-3 block text-[11px] font-bold uppercase tracking-wide text-faint">{day}</span>
             <div className="flex flex-col gap-2">
               {sessions.map((s) => {
-                const course = COURSES.find((c) => c.id === s.courseId);
+                const course = courses.find((c) => c.id === s.courseId);
                 return (
                   <div
                     key={s.id}

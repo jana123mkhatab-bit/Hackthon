@@ -11,8 +11,9 @@ import { AccessibilityPanel } from "@/components/settings/accessibility-panel";
 import { COURSES, SUBJECT_CATEGORIES } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import {
+  cacheOnboarding,
   loadOnboarding,
-  saveOnboarding,
+  syncOnboardingToServer,
   type OnboardingData,
 } from "@/lib/onboarding-store";
 import { useAccessibility } from "@/lib/accessibility-context";
@@ -32,28 +33,13 @@ export function OnboardingWizard() {
   const acc = useAccessibility();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<OnboardingData>(loadOnboarding());
-  const [serverLoaded, setServerLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("Computer Science");
   const [customName, setCustomName] = useState("");
+  const [finishing, setFinishing] = useState(false);
 
   useEffect(() => {
-    if (!serverLoaded) return;
-    saveOnboarding(data);
-  }, [data, serverLoaded]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/preferences")
-      .then((response) => response.json())
-      .then((payload: { preferences?: { onboarding?: OnboardingData } | null }) => {
-        if (!cancelled && payload.preferences?.onboarding) {
-          setData((current) => ({ ...current, ...payload.preferences?.onboarding }));
-        }
-        if (!cancelled) setServerLoaded(true);
-      })
-      .catch(() => { if (!cancelled) setServerLoaded(true); });
-    return () => { cancelled = true; };
-  }, []);
+    cacheOnboarding(data);
+  }, [data]);
 
   const selectedCourses = useMemo(
     () => COURSES.filter((c) => data.selectedCourseIds.includes(c.id)),
@@ -94,9 +80,11 @@ export function OnboardingWizard() {
     }));
   }
 
-  function finish() {
+  async function finish() {
     const finalData: OnboardingData = { ...data, completed: true };
-    saveOnboarding(finalData);
+    setData(finalData);
+    setFinishing(true);
+    await syncOnboardingToServer(finalData);
     acc.setState({ ...acc.state, onboarded: true });
     router.push("/dashboard");
   }
@@ -184,7 +172,7 @@ export function OnboardingWizard() {
         </div>
         <div className="flex items-center gap-3">
           {step === 4 && (
-            <Button variant="ghost" onClick={finish} className="normal-case font-semibold">
+            <Button variant="ghost" onClick={finish} disabled={finishing} className="normal-case font-semibold">
               Skip for now
             </Button>
           )}
@@ -193,8 +181,8 @@ export function OnboardingWizard() {
               Continue <ArrowRight className="size-4" />
             </Button>
           ) : (
-            <Button onClick={finish}>
-              Build My Study Plan <ArrowRight className="size-4" />
+            <Button onClick={finish} disabled={finishing}>
+              {finishing ? "Setting up..." : "Build My Study Plan"} <ArrowRight className="size-4" />
             </Button>
           )}
         </div>
