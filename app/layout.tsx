@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AccessibilityProvider } from "@/lib/accessibility-context";
 import { AccessibilityStatusRail } from "@/components/app/accessibility-status-rail";
+import { ToastProvider } from "@/lib/toast-context";
+import { ToastViewport } from "@/components/app/toast-viewport";
 
 export const metadata: Metadata = {
   title: "StudyPilot AI — Your Academic Copilot",
@@ -23,8 +25,11 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         <AccessibilityProvider>
-          <AccessibilityStatusRail />
-          {children}
+          <ToastProvider>
+            <AccessibilityStatusRail />
+            {children}
+            <ToastViewport />
+          </ToastProvider>
         </AccessibilityProvider>
       </body>
     </html>

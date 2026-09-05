@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Flame, ArrowRight, FileQuestion, Sparkles, LogOut } from "lucide-react";
+import { Flame, ArrowRight, FileQuestion, Sparkles, LogOut, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
+import { useCommandPalette } from "./command-palette-context";
 import type { Course } from "@/lib/types";
 
 export function Sidebar({
@@ -18,6 +19,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { setOpen: setCommandPaletteOpen } = useCommandPalette();
   const courseMatch = pathname.match(/^\/courses\/([^/]+)/);
   const activeCourse = courseMatch ? courses.find((c) => c.id === courseMatch[1]) : undefined;
 
@@ -33,6 +35,20 @@ export function Sidebar({
         <Link href="/dashboard" className="flex items-center gap-2 px-1">
           <span className="font-serif-display text-xl">StudyPilot AI</span>
         </Link>
+
+        <button
+          type="button"
+          onClick={() => setCommandPaletteOpen(true)}
+          className="flex items-center justify-between gap-2 rounded-[4px] border border-border bg-bg-warm px-3 py-2 text-xs font-semibold text-faint transition-colors hover:border-faint hover:text-body"
+        >
+          <span className="flex items-center gap-2">
+            <Search className="size-3.5" />
+            Search
+          </span>
+          <kbd className="rounded-[3px] border border-border bg-paper px-1.5 py-0.5 font-sans text-[10px]">
+            ⌘K
+          </kbd>
+        </button>
 
         <nav className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => {

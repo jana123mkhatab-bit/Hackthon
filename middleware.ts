@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/jwt-edge";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/courses", "/plan", "/techniques", "/settings"];
+const PROTECTED_PREFIXES = ["/dashboard", "/courses", "/knowledge", "/plan", "/techniques", "/settings"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -17,5 +17,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/courses/:path*", "/plan/:path*", "/techniques/:path*", "/settings/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/courses/:path*",
+    "/knowledge/:path*",
+    "/plan/:path*",
+    "/techniques/:path*",
+    "/settings/:path*",
+  ],
 };

@@ -10,6 +10,10 @@ import {
   CalendarClock,
   Sparkles,
   BookOpen,
+  ClipboardList,
+  CalendarDays,
+  BrainCircuit,
+  Network,
 } from "lucide-react";
 import { AccentCard, Card, StickyNote } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -276,11 +280,9 @@ export function KnowledgeGapsSummary({ courses }: { courses: Course[] }) {
     <Card className="p-5 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="font-serif-display text-lg">Knowledge Gaps</h3>
-        {gaps[0] && (
-          <Link href={`/courses/${gaps[0].course.id}/knowledge-map`} className="text-xs font-semibold text-terracotta">
-            See map
-          </Link>
-        )}
+        <Link href="/knowledge" className="text-xs font-semibold text-terracotta">
+          All topics
+        </Link>
       </div>
       {gaps.length === 0 ? (
         <p className="text-sm text-faint">No gaps surfaced yet.</p>
@@ -361,5 +363,37 @@ export function AIRecommendationCard({ courses }: { courses: Course[] }) {
         </Link>
       )}
     </StickyNote>
+  );
+}
+
+/* ---------------- Quick actions ---------------- */
+
+export function QuickActions({ courses }: { courses: Course[] }) {
+  const activeCourse = courses.find((c) => c.hasMaterials);
+  const courseHref = (suffix: string) => (activeCourse ? `/courses/${activeCourse.id}/${suffix}` : "/courses");
+
+  const actions = [
+    { label: "Take an Assessment", icon: ClipboardList, href: courseHref("assessment") },
+    { label: "View Study Plan", icon: CalendarDays, href: "/plan" },
+    { label: "Ask AI Tutor", icon: BrainCircuit, href: courseHref("tutor") },
+    { label: "Explore Knowledge DNA", icon: Network, href: "/knowledge" },
+  ];
+
+  return (
+    <Card className="p-5 sm:p-6">
+      <h3 className="mb-4 font-serif-display text-lg">Quick Actions</h3>
+      <div className="flex flex-col gap-1.5">
+        {actions.map((a) => (
+          <Link
+            key={a.label}
+            href={a.href}
+            className="flex items-center gap-3 rounded-[4px] px-2 py-2.5 text-sm font-semibold text-body transition-colors hover:bg-bg-warm hover:text-ink"
+          >
+            <a.icon className="size-4 text-terracotta" strokeWidth={2.25} />
+            {a.label}
+          </Link>
+        ))}
+      </div>
+    </Card>
   );
 }

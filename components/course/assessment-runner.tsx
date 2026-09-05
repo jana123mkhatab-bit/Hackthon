@@ -10,6 +10,7 @@ import { generateAssessment, gradeAssessment } from "@/lib/ai-client";
 import { adaptPlanAfterAssessment } from "@/lib/scheduling-engine";
 import { STUDY_PLAN } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/lib/toast-context";
 import { getCourseMaterialAsync } from "@/lib/course-material";
 import type { AssessmentQuestion, Course } from "@/lib/types";
 
@@ -41,6 +42,7 @@ export function AssessmentRunner({
   const [activeQuestions, setActiveQuestions] = useState(questions);
   const [material, setMaterial] = useState("");
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const toast = useToast();
 
   const current = activeQuestions[index];
 
@@ -86,10 +88,16 @@ export function AssessmentRunner({
     try {
       const res = await gradeAssessment(course.id, activeQuestions, answers, material, course);
       setResult(res);
+      let message: string | null = null;
       if (res.scorePct < 70 && res.gaps[0]) {
-        const { message } = adaptPlanAfterAssessment(STUDY_PLAN, course.id, res.gaps[0], 30);
+        message = adaptPlanAfterAssessment(STUDY_PLAN, course.id, res.gaps[0], 30).message;
         setAdaptMessage(message);
       }
+      toast.show({
+        tone: res.scorePct >= 70 ? "success" : "warning",
+        title: `Assessment graded — ${course.code}`,
+        message: `${res.scorePct}% · ${message ?? "Results saved to your knowledge map."}`,
+      });
     } catch (caught) {
       setGenerationError(caught instanceof Error ? caught.message : "Unable to grade this assessment.");
       setPhase("intro");

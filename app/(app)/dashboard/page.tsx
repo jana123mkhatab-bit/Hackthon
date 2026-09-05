@@ -9,6 +9,7 @@ import {
   KnowledgeGapsSummary,
   RecentAssessmentsList,
   AIRecommendationCard,
+  QuickActions,
   type RecommendedFocus,
 } from "@/components/dashboard/dashboard-widgets";
 import { requireStudentId } from "@/lib/server-session";
@@ -84,6 +85,7 @@ export default async function DashboardPage() {
           <KnowledgeGapsSummary courses={courses} />
           <RecentAssessmentsList assessments={recentAssessments} courses={courses} />
           <AIRecommendationCard courses={courses} />
+          <QuickActions courses={courses} />
         </div>
       </div>
     </div>
