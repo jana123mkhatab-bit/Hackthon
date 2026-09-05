@@ -17,6 +17,7 @@ export function toLectureAnalysisDoc(result: AnalysisResult, materialId: string,
     generatedAt: now(),
     assessmentPatterns: result.assessmentPatterns,
     dependencies: result.dependencies,
+    analysisSource: result.analysisSource,
   };
 }
 
@@ -28,5 +29,6 @@ export function toAnalysisResult(doc: LectureAnalysisDoc, fileName: string): Ana
     importantConcepts: doc.importantConcepts,
     assessmentPatterns: doc.assessmentPatterns ?? doc.professorFocus,
     dependencies: doc.dependencies ?? [],
+    analysisSource: doc.analysisSource,
   };
 }

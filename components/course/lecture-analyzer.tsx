@@ -23,6 +23,7 @@ export function LectureAnalyzer({ course }: { course: Course }) {
 
   useEffect(() => {
     let cancelled = false;
+    let loadedFromServer = false;
     async function loadSavedMaterial() {
       try {
         const response = await fetch(`/api/materials?courseId=${encodeURIComponent(course.id)}`);
@@ -30,6 +31,7 @@ export function LectureAnalyzer({ course }: { course: Course }) {
           material?: { file_name?: string; extracted_text?: string; analysis?: AnalysisResult | null } | null;
         };
         if (!cancelled && payload.material?.extracted_text) {
+          loadedFromServer = true;
           setFileName(payload.material.file_name ?? "Uploaded material");
           if (payload.material.analysis) {
             setResult({ ...payload.material.analysis, material: payload.material.extracted_text });
@@ -41,7 +43,7 @@ export function LectureAnalyzer({ course }: { course: Course }) {
       }
       try {
         const saved = window.localStorage.getItem(`${ANALYSIS_KEY}${course.id}`);
-        if (saved) {
+        if (saved && !loadedFromServer) {
           const parsed = JSON.parse(saved) as AnalysisResult;
           if (!cancelled && parsed.courseId === course.id && typeof parsed.material === "string") {
             setResult(parsed);
@@ -94,7 +96,7 @@ export function LectureAnalyzer({ course }: { course: Course }) {
           ref={fileInput}
           type="file"
           className="hidden"
-          accept=".txt,.md,.csv,.json,.rtf,.xml,.html,.pdf"
+          accept=".txt,.md,.csv,.json,.rtf,.xml,.html,.pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp,.bmp"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void startAnalysis(f);
@@ -151,7 +153,12 @@ export function LectureAnalyzer({ course }: { course: Course }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-sm text-faint">
-          <Check className="size-4 text-sage" /> Analyzed from your uploaded material
+          <Check className="size-4 text-sage" />{" "}
+          {result.analysisSource === "gemini"
+            ? "Analyzed by Gemini from your uploaded material"
+            : result.analysisSource === "fallback"
+              ? "Analyzed with built-in fallback from your uploaded material"
+              : "Analyzed from your uploaded material"}
         </span>
         <button
           type="button"
@@ -168,7 +175,7 @@ export function LectureAnalyzer({ course }: { course: Course }) {
             const f = e.target.files?.[0];
             if (f) void startAnalysis(f);
           }}
-          accept=".txt,.md,.csv,.json,.rtf,.xml,.html,.pdf"
+          accept=".txt,.md,.csv,.json,.rtf,.xml,.html,.pdf,.docx,.pptx,.png,.jpg,.jpeg,.gif,.webp,.bmp"
         />
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import type { ReactNode } from "react";
 import { Send, Sparkles, Loader2, BookOpen } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { ChipButton } from "@/components/ui/chip";
@@ -18,6 +19,33 @@ const QUICK_PROMPTS = [
   "Why is my answer wrong?",
   "Compare two concepts",
 ];
+
+function formatTutorContent(content: string): ReactNode {
+  const lines = content
+    .replace(/\r\n/g, "\n")
+    // Gemini sometimes returns numbered items in one paragraph.
+    .replace(/\s+(?=\d+\.\s)/g, "\n")
+    .replace(/\s+(?=[-•]\s)/g, "\n")
+    .split("\n");
+
+  return lines.map((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) return <span key={index} className="block h-2" />;
+
+    const parts = trimmed.split(/(\*\*[^*]+\*\*)/g);
+    return (
+      <span key={index} className="block">
+        {parts.map((part, partIndex) =>
+          part.startsWith("**") && part.endsWith("**") ? (
+            <strong key={partIndex}>{part.slice(2, -2)}</strong>
+          ) : (
+            <span key={partIndex}>{part}</span>
+          )
+        )}
+      </span>
+    );
+  });
+}
 
 export function TutorChat({ course }: { course: Course }) {
   const acc = useAccessibility();
@@ -104,9 +132,9 @@ export function TutorChat({ course }: { course: Course }) {
                     <Sparkles className="size-3" /> AI Tutor
                   </span>
                 )}
-                <p className={cn("leading-relaxed", m.role === "assistant" && acc.hasMode("dyslexia") && "dys-copy")}>
-                  {m.content}
-                </p>
+                <div className={cn("leading-relaxed", m.role === "assistant" && acc.hasMode("dyslexia") && "dys-copy")}>
+                  {formatTutorContent(m.content)}
+                </div>
                 {m.groundedIn && (
                   <span className="text-[11px] italic text-faint">Grounded in: {m.groundedIn}</span>
                 )}
