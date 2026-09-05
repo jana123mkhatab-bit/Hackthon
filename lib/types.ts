@@ -77,6 +77,7 @@ export interface ExplanationSettings {
 export interface AnalysisResult {
   fileName: string;
   courseId: string;
+  analysisSource?: "gemini" | "fallback";
   learningObjectives: string[];
   importantConcepts: { name: string; importance: number }[];
   assessmentPatterns: string[];

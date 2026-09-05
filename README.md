@@ -7,7 +7,7 @@ real knowledge gaps, and builds a study plan and interface around how you person
 The frontend keeps its offline/demo fallback, while production requests use the App Router API,
 an anonymous secure session cookie, and MongoDB Atlas for user preferences, course/material
 metadata, analyses, assessments, tutor messages, and study plans. Lecture analysis and assessment
-generation/grading use Groq server-side; the retrieval-grounded tutor uses Gemini server-side.
+generation/grading and the retrieval-grounded tutor use Gemini server-side.
 Google Calendar remains a clearly-labeled mock.
 
 ## Getting started
@@ -26,7 +26,6 @@ Open [http://localhost:3000](http://localhost:3000). The marketing site is the `
 Copy `.env.example` to `.env.local` and add server-only API keys before using live AI:
 
 ```bash
-GROQ_API_KEY=your_groq_key
 GEMINI_API_KEY=your_gemini_key
 MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
 MONGODB_DB=studypilot
@@ -82,7 +81,7 @@ npm start
    SRV connection string. Set `MONGODB_URI` and `MONGODB_DB` in Vercel Environment Variables. The
    official MongoDB Node.js driver is cached by `lib/db.ts`, so serverless invocations reuse
    connections safely.
-2. In the Vercel project Environment Variables, add `GROQ_API_KEY` and `GEMINI_API_KEY` (and
+2. In the Vercel project Environment Variables, add `GEMINI_API_KEY` (and
    optional model overrides). Never use a `NEXT_PUBLIC_` prefix for provider keys.
 3. Deploy with `vercel --prod` or connect the Git repository. Collections and ownership-scoped
    indexes are created lazily by the application; no migration command is required. No Blob bucket
@@ -107,13 +106,15 @@ AI keys are absent, the original mock course data and deterministic AI fallbacks
   persisted through the API when MongoDB is configured; `localStorage` remains an offline fallback.
 
 **AI implementation:**
-- `app/api/ai/analyze` extracts uploaded text and calls Groq for structured objectives, concepts,
+- `app/api/ai/analyze` extracts uploaded text and calls Gemini for structured objectives, concepts,
   assessment patterns, and dependencies.
-- `app/api/ai/assessment` generates and grades assessments with Groq.
+- `app/api/ai/assessment` generates and grades assessments with Gemini.
 - `app/api/ai/tutor` calls Gemini with course context, uploaded material, preferences, and recent
   conversation history.
 - `lib/ai-client.ts` contains browser-safe API clients; provider keys never enter client code.
-- Plain text, Markdown, CSV, JSON, RTF, HTML, XML, and text-based PDF uploads are supported. Binary or
+- Plain text, Markdown, CSV, JSON, RTF, HTML, XML, PDF, DOCX, PPTX, PNG, JPG, JPEG, and GIF uploads
+  are supported. Text is detected from the file signature where possible, normal documents use their
+  native parsers, and images or scanned PDFs use English OCR. Corrupted, password-protected, or
   unreadable files receive a safe validation error.
 - `lib/calendar-mock.ts` — a mock Google Calendar connection. The UI explicitly labels every
   button and status message "(mock)" so it's never mistaken for a real integration.
@@ -136,7 +137,7 @@ components/
   ui/                    Design-system primitives (Button, Card, Chip, Switch, Progress, ...)
 lib/
   mock-data.ts           Sample courses, concepts, assessments, professor focus data
-  ai.ts                   Server-only Groq/Gemini provider layer
+  ai.ts                   Server-only Gemini provider layer
   ai-client.ts            Browser-safe API clients
   calendar-mock.ts        Mock Google Calendar integration
   scheduling-engine.ts     Deterministic study-plan generator

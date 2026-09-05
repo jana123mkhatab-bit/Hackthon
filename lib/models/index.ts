@@ -57,6 +57,7 @@ export interface LectureAnalysisDoc {
   /** Not in the spec's required field list — preserves the original AI analysis for a lossless round-trip to the frontend's AnalysisResult shape. */
   assessmentPatterns?: string[];
   dependencies?: { concept: string; requires: string[] }[];
+  analysisSource?: "gemini" | "fallback";
 }
 
 export type AssessmentQuestionType =
